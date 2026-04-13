@@ -1,0 +1,17 @@
+{
+  "drive_path": "C:/",
+  "current_folder": "D:\\Desarrollo\\PlayOnThat",
+  "playlist": [
+    "D:\\Desarrollo\\PlayOnThat\\session_test.mp3"
+  ],
+  "current_index": 0,
+  "current_path": "D:\\Desarrollo\\PlayOnThat\\session_test.mp3",
+  "selected_index": 0,
+  "background_image": "D:\\Desarrollo\\PlayOnThat\\play_icon.png",
+  "audio_device": "",
+  "monitor_index": 0,
+  "fullscreen": false,
+  "volume": 33,
+  "playback_state": "NothingSpecial",
+  "playback_position_ms": 0
+}
