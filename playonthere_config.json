@@ -1,17 +1,28 @@
 {
-  "drive_path": "C:/",
-  "current_folder": "D:\\Desarrollo\\PlayOnThat",
+  "drive_path": "D:/",
+  "current_folder": "D:/MixDown",
   "playlist": [
-    "D:\\Desarrollo\\PlayOnThat\\session_test.mp3"
+    "D:/MixDown\\Abismo Infinito.mp3",
+    "D:/MixDown\\Amor Figurativo - Pista.mp3",
+    "D:/MixDown\\Amor Figurativo.mp3",
+    "D:/MixDown\\Aprendiz de Zombie.mp3",
+    "D:/MixDown\\Burbuja (Buena Suerte) - Pista.mp3",
+    "D:/MixDown\\Burbuja (Buena Suerte).mp3",
+    "D:/MixDown\\Burbuja - Muchas Suerte (Pista).wav",
+    "D:/MixDown\\Buscando el Trance.mp3",
+    "D:/MixDown\\Desotoña _  Voz.mp3",
+    "D:/MixDown\\Desotoña_Pista.mp3",
+    "D:/MixDown\\El Futuro es Nuestro.mp3",
+    "D:/MixDown\\Solo el tiempo.mp3"
   ],
-  "current_index": 0,
-  "current_path": "D:\\Desarrollo\\PlayOnThat\\session_test.mp3",
-  "selected_index": 0,
+  "current_index": 4,
+  "current_path": "D:/MixDown\\Burbuja (Buena Suerte) - Pista.mp3",
+  "selected_index": 4,
   "background_image": "D:\\Desarrollo\\PlayOnThat\\play_icon.png",
   "audio_device": "",
   "monitor_index": 0,
   "fullscreen": false,
-  "volume": 33,
-  "playback_state": "NothingSpecial",
-  "playback_position_ms": 0
+  "volume": 66,
+  "playback_state": "Playing",
+  "playback_position_ms": 6790
 }

@@ -80,6 +80,43 @@ def configure_vlc_runtime():
             break
 
 
+class SeekBar(QProgressBar):
+    seekRequested = Signal(int)  # valor 0-1000
+
+    def __init__(self):
+        super().__init__()
+        self.setCursor(Qt.PointingHandCursor)
+        self._seeking = False
+
+    def _seek_from_event(self, event):
+        width = self.width()
+        if width <= 0:
+            return
+        ratio = max(0.0, min(1.0, event.position().x() / width))
+        value = int(ratio * self.maximum())
+        self.setValue(value)
+        self.seekRequested.emit(value)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._seeking = True
+            self._seek_from_event(event)
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._seeking:
+            self._seek_from_event(event)
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._seeking = False
+        else:
+            super().mouseReleaseEvent(event)
+
+
 class PlaylistWidget(QListWidget):
     playlistChanged = Signal()
 
@@ -115,8 +152,11 @@ class DualPlayer:
         self.player_b = self.instance.media_player_new()
         self.active = self.player_a
         self.inactive = self.player_b
-        self.crossfade_time = 3.0
+        self.crossfade_time = 4.0
         self.volume = 100
+        self._preloaded = False
+        self._preloaded_path = None
+        self._preloading_path = None
 
     def set_media(self, player, path):
         media = self.instance.media_new(path)
@@ -126,36 +166,81 @@ class DualPlayer:
         self.set_media(self.active, path)
         self.active.audio_set_volume(self.volume)
         self.active.play()
+        self._preloaded = False
+        self._preloaded_path = None
+        self._preloading_path = None
 
-    def prepare_next(self, path):
+    def preload(self, path):
+        """Carga y prebuffea la siguiente pista en el player inactivo sin emitir audio."""
+        self._preloaded = False
+        self._preloaded_path = None
+        self._preloading_path = path
         self.set_media(self.inactive, path)
-        self.inactive.audio_set_volume(0)
-
-    def crossfade(self):
         self.inactive.audio_set_volume(0)
         self.inactive.play()
 
-        steps = 30
-        delay = self.crossfade_time / steps
-        target_volume = self.volume
+        def buffer_and_seek():
+            deadline = time.time() + 10.0
+            while time.time() < deadline:
+                state = self.inactive.get_state()
+                if state == vlc.State.Playing:
+                    # Decodificar 2 s para llenar el buffer interno de VLC
+                    time.sleep(2.0)
+                    self.inactive.pause()
+                    time.sleep(0.1)
+                    self.inactive.set_time(0)
+                    time.sleep(0.1)
+                    self._preloaded = True
+                    self._preloaded_path = path
+                    self._preloading_path = None
+                    return
+                if state in (vlc.State.Error, vlc.State.Ended, vlc.State.Stopped):
+                    self._preloading_path = None
+                    return
+                time.sleep(0.05)
+            self._preloading_path = None
 
-        def fade():
-            for step in range(steps):
-                active_volume = int(target_volume * (1 - step / steps))
-                inactive_volume = int(target_volume * (step / steps))
-                self.active.audio_set_volume(active_volume)
-                self.inactive.audio_set_volume(inactive_volume)
-                time.sleep(delay)
+        threading.Thread(target=buffer_and_seek, daemon=True).start()
 
-            self.active.stop()
-            self.active, self.inactive = self.inactive, self.active
-            self.active.audio_set_volume(target_volume)
+    def is_being_preloaded(self, path):
+        return self._preloading_path == path
 
-        threading.Thread(target=fade, daemon=True).start()
+    def is_preloaded(self, path=None):
+        if path is not None:
+            return (
+                self._preloaded
+                and self._preloaded_path == path
+                and self.inactive.get_state() == vlc.State.Paused
+            )
+        return self._preloaded and self.inactive.get_state() == vlc.State.Paused
+
+    def start_crossfade(self, path):
+        """Arranca el player inactivo al vol=0. El fade de volumen se gestiona externamente con QTimer."""
+        was_preloaded = self.is_preloaded(path)
+        self._preloaded = False
+        self._preloaded_path = None
+        if not was_preloaded:
+            self.set_media(self.inactive, path)
+        self.inactive.audio_set_volume(0)
+        self.inactive.play()
+
+    def apply_crossfade_volumes(self, ratio):
+        """ratio 0.0 = vol pleno en activo; 1.0 = vol pleno en inactivo."""
+        self.active.audio_set_volume(max(0, int(self.volume * (1.0 - ratio))))
+        self.inactive.audio_set_volume(max(0, int(self.volume * ratio)))
+
+    def finalize_crossfade(self):
+        """Completa el swap tras el fade."""
+        self.active.stop()
+        self.active, self.inactive = self.inactive, self.active
+        self.active.audio_set_volume(self.volume)
 
     def stop(self):
         self.player_a.stop()
         self.player_b.stop()
+        self._preloaded = False
+        self._preloaded_path = None
+        self._preloading_path = None
 
     def pause(self):
         self.active.pause()
@@ -230,6 +315,11 @@ class PlayerUI(QWidget):
         self.monitors = []
         self.icon_provider = QFileIconProvider()
         self.restoring_session = False
+        self._crossfade_triggered = False
+        self._advancing = False
+        self.crossfade_enabled = False
+        self._fade_step = 0
+        self._fade_steps = 80  # 4000 ms / 50 ms por paso
 
         self.init_ui()
         self.apply_styles()
@@ -280,7 +370,7 @@ class PlayerUI(QWidget):
         self.folder_status = QLabel("Selecciona una carpeta para cargar archivos compatibles")
         self.now_playing = QLabel("Estado: detenido")
 
-        self.progress_bar = QProgressBar()
+        self.progress_bar = SeekBar()
         self.progress_bar.setRange(0, 1000)
         self.progress_bar.setValue(0)
         self.progress_label = QLabel("00:00 / 00:00")
@@ -315,6 +405,12 @@ class PlayerUI(QWidget):
         self.next_btn = self.create_transport_button(QStyle.SP_MediaSkipForward, "Siguiente pista", self.next_track)
         self.random_btn = self.create_transport_button(QStyle.SP_BrowserReload, "Reproducción aleatoria", self.random_track)
 
+        self.crossfade_btn = QToolButton()
+        self.crossfade_btn.setText("CF")
+        self.crossfade_btn.setToolTip("Activar/desactivar crossfade (solo audio)")
+        self.crossfade_btn.setCheckable(True)
+        self.crossfade_btn.setFixedSize(56, 56)
+
         self.volume_label = QLabel("Vol 80%")
         self.volume_slider = QSlider(Qt.Horizontal)
         self.volume_slider.setRange(0, 100)
@@ -326,6 +422,7 @@ class PlayerUI(QWidget):
         controls_layout.addWidget(self.stop_btn)
         controls_layout.addWidget(self.next_btn)
         controls_layout.addWidget(self.random_btn)
+        controls_layout.addWidget(self.crossfade_btn)
         controls_layout.addStretch(1)
         controls_layout.addWidget(self.volume_label)
         controls_layout.addWidget(self.volume_slider)
@@ -381,6 +478,13 @@ class PlayerUI(QWidget):
         self.progress_timer.setInterval(500)
         self.progress_timer.timeout.connect(self.update_playback_ui)
         self.progress_timer.start()
+
+        self.progress_bar.seekRequested.connect(self._on_seek)
+
+        self._fade_timer = QTimer(self)
+        self._fade_timer.setInterval(50)
+        self._fade_timer.timeout.connect(self._on_fade_step)
+        self.crossfade_btn.toggled.connect(self._toggle_crossfade)
 
         if not self.load_session() and self.drive_select.count() > 0:
             self.change_drive()
@@ -440,6 +544,10 @@ class PlayerUI(QWidget):
             QToolButton:pressed {
                 background: #7b7b7b;
             }
+            QToolButton:checked {
+                background: #415a77;
+                border: 1px solid #5c7c9d;
+            }
             QProgressBar {
                 min-height: 18px;
                 text-align: center;
@@ -498,6 +606,37 @@ class PlayerUI(QWidget):
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         return f"{minutes:02d}:{seconds:02d}"
 
+    def _on_seek(self, value):
+        length_ms = self.player.get_length()
+        if length_ms <= 0:
+            return
+        target_ms = int((value / 1000) * length_ms)
+        self.player.set_time(target_ms)
+
+    def _toggle_crossfade(self, checked):
+        self.crossfade_enabled = checked
+
+    def _do_crossfade(self, next_path):
+        self._stop_fade()
+        self.player.start_crossfade(next_path)
+        self._fade_step = 0
+        self._fade_timer.start()
+
+    def _stop_fade(self):
+        if self._fade_timer.isActive():
+            self._fade_timer.stop()
+            self.player.finalize_crossfade()
+
+    def _on_fade_step(self):
+        self._fade_step += 1
+        ratio = self._fade_step / self._fade_steps
+        if ratio >= 1.0:
+            self._fade_timer.stop()
+            self.player.finalize_crossfade()
+            self._crossfade_triggered = False
+        else:
+            self.player.apply_crossfade_volumes(ratio)
+
     def update_status_bar(self, playback_text=None):
         drive_text = self.drive_select.currentText() or "Sin unidad"
         monitor_text = self.monitor_select.currentText() or "Sin monitor"
@@ -527,6 +666,70 @@ class PlayerUI(QWidget):
             playback_text = self.now_playing.text()
 
         self.update_status_bar(playback_text)
+        self._check_auto_advance(length_ms, current_ms)
+
+    def _preload_next(self, from_index):
+        if not self.crossfade_enabled:
+            return
+        next_index = from_index + 1
+        if (
+            next_index < len(self.playlist)
+            and self.current_index == from_index
+            and self.is_audio_file(self.playlist[from_index])
+            and self.is_audio_file(self.playlist[next_index])
+            and not self.player.is_preloaded(self.playlist[next_index])
+            and not self.player.is_being_preloaded(self.playlist[next_index])
+        ):
+            self.player.preload(self.playlist[next_index])
+
+    def _check_auto_advance(self, length_ms, current_ms):
+        if not self.playlist or self.current_index == -1:
+            return
+
+        state = self.player.get_state()
+        crossfade_ms = self.player.crossfade_time * 1000
+        next_index = self.current_index + 1
+        current_path = self.playlist[self.current_index]
+        next_path = self.playlist[next_index] if next_index < len(self.playlist) else None
+
+        can_crossfade = (
+            self.crossfade_enabled
+            and next_path is not None
+            and self.is_audio_file(current_path)
+            and self.is_audio_file(next_path)
+        )
+
+        # Crossfade automático cuando quedan <= 4000 ms y ambas pistas son audio
+        if can_crossfade and not self._crossfade_triggered and length_ms > 0:
+            remaining_ms = length_ms - current_ms
+            if 0 < remaining_ms <= crossfade_ms:
+                if not self.player.is_preloaded(next_path):
+                    # Buffer aún no listo: arrancar precarga si nadie lo está haciendo ya
+                    if not self.player.is_being_preloaded(next_path):
+                        self.player.preload(next_path)
+                    # No disparar crossfade todavía; revisamos en el siguiente tick (500 ms)
+                    return
+                self._crossfade_triggered = True
+                self._do_crossfade(next_path)
+                self.current_index = next_index
+                self.file_list.setCurrentRow(next_index)
+                self.now_playing.setText(f"Reproduciendo: {os.path.basename(next_path)}")
+                preload_delay = int(crossfade_ms) + 1500
+                QTimer.singleShot(preload_delay, lambda idx=next_index: self._preload_next(idx))
+                return
+
+        # Fallback: la pista terminó y no hay crossfade en curso
+        if state == "Ended" and not self._advancing and not self._fade_timer.isActive():
+            self._advancing = True
+            if next_index < len(self.playlist):
+                self.play_track_at(next_index, False)
+            else:
+                self._stop_fade()
+                self.player.stop()
+                self.now_playing.setText("Estado: lista de reproducción finalizada")
+                self.progress_bar.setValue(0)
+                self.progress_label.setText("00:00 / 00:00")
+                self.update_status_bar("Lista finalizada")
 
     def load_drives(self):
         self.drive_select.clear()
@@ -755,16 +958,30 @@ class PlayerUI(QWidget):
             return
 
         path = self.playlist[index]
-        if self.current_index == -1 or not use_crossfade:
-            self.player.play_first(path)
+        current_path = self.playlist[self.current_index] if self.current_index != -1 else None
+        can_crossfade = (
+            use_crossfade
+            and self.crossfade_enabled
+            and current_path is not None
+            and self.is_audio_file(path)
+            and self.is_audio_file(current_path)
+        )
+
+        if can_crossfade:
+            self._do_crossfade(path)
         else:
-            self.player.prepare_next(path)
-            self.player.crossfade()
+            self._stop_fade()
+            self.player.play_first(path)
 
         self.current_index = index
+        self._crossfade_triggered = False
+        self._advancing = False
         self.file_list.setCurrentRow(index)
         self.now_playing.setText(f"Reproduciendo: {os.path.basename(path)}")
         self.update_playback_ui()
+
+        # Iniciar la precarga del siguiente tema inmediatamente (500 ms para que VLC estabilice)
+        QTimer.singleShot(500, lambda idx=index: self._preload_next(idx))
 
     def load_monitors(self):
         self.monitors = get_monitors()
