@@ -1,85 +1,158 @@
 # PlayOnThere
 
-Reproductor multimedia para Windows pensado para ejecutarse en un segundo monitor.
+Reproductor multimedia para Windows pensado para ejecutarse en un segundo monitor (o cualquier monitor). Permite cargar archivos y carpetas de video/audio, controlar volumen, elegir dispositivo de audio, poner en pantalla completa y guardar el estado de la sesion.
 
-## Enlaces
+## Tabla de contenidos
 
-- Repositorio: https://github.com/YoeKimera/PlayOnThere
-- Releases: https://github.com/YoeKimera/PlayOnThere/releases
-- Ultimo release: https://github.com/YoeKimera/PlayOnThere/releases/latest
-- Reportar bugs o pedir mejoras: https://github.com/YoeKimera/PlayOnThere/issues
+- [Descargar e instalar](#descargar-e-instalar)
+  - [Opción 1: Instalador (recomendado)](#opción-1-instalador-recomendado)
+  - [Opción 2: Portable (sin instalacion)](#opción-2-portable-sin-instalacion)
+- [Primer uso](#primer-uso)
+- [Ejecutar desde codigo fuente](#ejecutar-desde-codigo-fuente)
+  - [Requisitos](#requisitos)
+  - [Clonar y ejecutar](#clonar-y-ejecutar)
+- [Compilar ejecutable](#compilar-ejecutable)
+- [Configuracion](#configuracion)
+- [Dependencias](#dependencias)
+- [Reportar problemas](#reportar-problemas)
+- [Licencia](#licencia)
 
-## Que incluye el release
+---
 
-En cada version publicada normalmente encontraras:
+## Descargar e instalar
 
-- `PlayOnThere-Setup.exe`: instalador para Windows.
-- `PlayOnThere-portable.zip`: version portable sin instalacion.
+Ve a la pagina de releases para obtener la ultima version:
 
-## Tutorial 1: Instalacion rapida (Setup)
+**https://github.com/YoeKimera/PlayOnThere/releases/latest**
 
-1. Entra a la pagina de releases: https://github.com/YoeKimera/PlayOnThere/releases/latest
-2. Descarga `PlayOnThere-Setup.exe`.
-3. Ejecuta el instalador y completa el asistente.
-4. Abre PlayOnThere desde el menu Inicio o acceso directo.
+Encontraras dos opciones de descarga:
 
-## Tutorial 2: Uso en modo portable
+| Archivo | Descripcion |
+|---|---|
+| `PlayOnThere-Setup.exe` | Instalador para Windows. Instala la app y crea accesos directos. |
+| `PlayOnThere-portable.zip` | Version portable. No requiere instalacion, solo descomprimir y ejecutar. |
 
-1. Descarga `PlayOnThere-portable.zip` desde: https://github.com/YoeKimera/PlayOnThere/releases/latest
-2. Descomprime el archivo en la carpeta que prefieras.
-3. Ejecuta `PlayOnThere.exe`.
-4. Si Windows SmartScreen aparece, selecciona "Mas informacion" y luego "Ejecutar de todas formas" si confias en el origen.
+---
 
-## Tutorial 3: Primer uso (paso a paso)
+### Opción 1: Instalador (recomendado)
+
+1. Descarga `PlayOnThere-Setup.exe` desde [releases](https://github.com/YoeKimera/PlayOnThere/releases/latest).
+2. Ejecuta el instalador.
+3. Si Windows SmartScreen lo bloquea, haz clic en **"Mas informacion"** → **"Ejecutar de todas formas"**.
+4. Sigue el asistente de instalacion.
+5. Abre PlayOnThere desde el menu Inicio o el acceso directo del escritorio.
+
+Para desinstalar, usa "Agregar o quitar programas" en la configuracion de Windows.
+
+---
+
+### Opción 2: Portable (sin instalacion)
+
+1. Descarga `PlayOnThere-portable.zip` desde [releases](https://github.com/YoeKimera/PlayOnThere/releases/latest).
+2. Descomprime el archivo en la carpeta que prefieras (por ejemplo `C:\Tools\PlayOnThere`).
+3. Entra a la carpeta descomprimida y ejecuta `PlayOnThere.exe`.
+4. Si Windows SmartScreen aparece, selecciona **"Mas informacion"** → **"Ejecutar de todas formas"**.
+
+> La version portable guarda la configuracion (`playonthere_config.json`) en la misma carpeta donde esta el ejecutable, por lo que puedes llevarla en un pendrive o moverla libremente.
+
+---
+
+## Primer uso
 
 1. Abre la aplicacion.
-2. Carga tus archivos multimedia o una carpeta.
-3. Elige el monitor secundario en la configuracion de pantalla/monitor.
-4. Ajusta volumen, pantalla completa y dispositivo de audio segun necesidad.
-5. Guarda configuracion para retomar sesion mas rapido.
+2. Usa **"Agregar archivos"** o **"Agregar carpeta"** para cargar tu contenido multimedia.
+3. En la seccion de **Monitor**, elige el monitor donde quieres reproducir el video (util para segundo monitor o TV).
+4. En la seccion de **Audio**, elige el dispositivo de salida de audio que prefieras.
+5. Ajusta el volumen con el control deslizante.
+6. Presiona **Play** para comenzar la reproduccion.
+7. Usa el boton de **pantalla completa** para expandir el video en el monitor seleccionado.
+8. El estado de la sesion se guarda automaticamente en `playonthere_config.json` para que al volver a abrir la app retomes donde dejaste.
+
+---
 
 ## Ejecutar desde codigo fuente
 
 ### Requisitos
 
-- Windows 10/11
-- Python 3.11+
+- Windows 10 o Windows 11
+- Python 3.11 o superior
+- [VLC media player](https://www.videolan.org/vlc/) instalado en `C:\Program Files\VideoLAN\VLC` (requerido por `python-vlc`)
+- Git
 
-### Pasos
-
-1. Clona el repositorio.
-2. Crea y activa un entorno virtual.
-3. Instala dependencias con `requirements.txt`.
-4. Ejecuta la app con `python main.py`.
-
-Ejemplo en PowerShell:
+### Clonar y ejecutar
 
 ```powershell
+# 1. Clonar el repositorio
 git clone https://github.com/YoeKimera/PlayOnThere.git
 cd PlayOnThere
+
+# 2. Crear y activar el entorno virtual
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+
+# 3. Instalar dependencias
 pip install -r requirements.txt
+
+# 4. Ejecutar la aplicacion
 python main.py
 ```
 
+---
+
 ## Compilar ejecutable
 
-El proyecto incluye scripts para generar distribucion e instalador:
-
-- `build_dist.ps1`
-- `build_installer.ps1`
-
-Ejecuta en PowerShell desde la raiz del proyecto:
+El proyecto incluye scripts de PowerShell para generar el ejecutable y el instalador.
 
 ```powershell
+# Genera el ejecutable en dist/
 .\build_dist.ps1
+
+# Genera el instalador en installer/
 .\build_installer.ps1
 ```
 
+Requisitos adicionales para compilar:
+- [PyInstaller](https://pyinstaller.org/) (incluido en `requirements.txt`)
+- [Inno Setup](https://jrsoftware.org/isinfo.php) instalado (para `build_installer.ps1`)
+
+Los archivos de salida seran:
+- `dist\PlayOnThere-portable.zip` — version portable lista para distribuir
+- `installer\PlayOnThere-Setup.exe` — instalador de Windows
+
+---
+
 ## Configuracion
 
-La app guarda estado y preferencias en `playonthere_config.json`.
+La app guarda su estado y preferencias en `playonthere_config.json`, que se crea automaticamente en la misma ubicacion que el ejecutable (o en la raiz del proyecto si se ejecuta desde codigo fuente).
+
+El archivo almacena informacion como:
+- Monitor seleccionado
+- Dispositivo de audio seleccionado
+- Volumen
+- Lista de archivos cargados
+- Posicion de reproduccion
+
+---
+
+## Dependencias
+
+| Paquete | Uso |
+|---|---|
+| `PySide6` | Interfaz grafica (Qt 6) |
+| `python-vlc` | Reproduccion multimedia via VLC |
+| `screeninfo` | Deteccion de monitores conectados |
+
+---
+
+## Reportar problemas
+
+Si encuentras un bug o quieres pedir una mejora:
+
+**https://github.com/YoeKimera/PlayOnThere/issues**
+
+Incluye en tu reporte: version de Windows, version de PlayOnThere y descripcion del problema.
+
+---
 
 ## Licencia
 
